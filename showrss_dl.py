@@ -3,6 +3,7 @@
 """
 https://github.com/mllg/showrss_dl
 """
+__version__ = '0.1'
 
 import argparse
 import subprocess
@@ -13,13 +14,12 @@ import re
 from os.path import exists, expanduser
 from sys import exit, stdout, stderr
 
-__version__ = '0.1'
 
 class ConsoleOutput:
     def __init__(self, verbose):
-       self.__verbose = verbose
+       self.verbose = verbose
     def info(self, msg):
-        if self.__verbose:
+        if self.verbose:
             stdout.write('[INFO] %s\n' % msg)
             stdout.flush()
     def warn(self, msg):
@@ -43,8 +43,6 @@ class MagnetCache:
     def add(self, new):
         self.hashs.append(new)
         self.needsupdate = True
-    def check(self, hash):
-        return hash in self.hashs
     def write(self):
         if self.needsupdate:
             with open(self.fn, 'wb') as f:
@@ -73,6 +71,8 @@ if __name__ == "__main__":
     if args.auth is not None:
         cmd += ['--auth', args.auth]
     
+    if re.search(r'magnets=true', args.feed) is None:
+        out.exit('Argument "magnets=true" not found in feed url')
     feed = feedparser.parse(args.feed)
     if feed.bozo:
         out.error('Bozo feed in "%s" (%s)' % (args.feed, feed.bozo_exception.getMessage()))
@@ -107,7 +107,7 @@ if __name__ == "__main__":
             continue
         hash = match.groups()[0]
 
-        if cache.check(hash):
+        if hash in cache.hashs:
             out.info('Entry "%s" found in cache, skipping' % title)
             continue
         
