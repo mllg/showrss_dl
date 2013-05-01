@@ -9,8 +9,8 @@ __version__ = '0.2'
 
 import argparse
 import feedparser
-import atexit
 import re
+import atexit
 import subprocess
 from urllib.request import urlretrieve
 from pickle import load, dump
@@ -109,7 +109,7 @@ parser.add_argument('--verbose',
 parser.add_argument('--cachefile',
         default = '~/.showrss_cache',
         help = 'File to store known torrent ids. Default is "~/.showrss_cache".')
-parser.add_argument('feed', metavar = 'feed', nargs = '?', type = str,
+parser.add_argument('feed', metavar = 'feed', nargs = 1,
         help = 'showRSS feed with magnet links as generated on the website.')
 args = parser.parse_args()
 
@@ -117,7 +117,7 @@ args = parser.parse_args()
 out = ConsoleOutput(args.verbose)
 
 # add namespace=true to the feed url if it is missing
-feed = args.feed
+feed = args.feed[0]
 if feed.find('namespaces=true') == -1:
     feed += '&namespaces=true'
 
