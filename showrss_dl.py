@@ -60,7 +60,7 @@ class SendMagnet:
     def __init__(self, auth):
         if auth is not None:
             self.cmd += ['--auth', auth]
-    def send(self, link):
+    def send(self, link, title):
         if not link[:7] == 'magnet:':
             self.msg = 'Malformed magnet link (%s)' % link
             return False
@@ -84,9 +84,9 @@ class SendTorrent:
     msg = None
     def __init__(self, dir):
         self.dir = path.expanduser(dir)
-    def send(self, link):
+    def send(self, link, title):
         try:
-            fn = path.join(self.dir, path.basename(link.strip('/')))
+            fn = path.join(self.dir, "%s.torrent" % title)
             urlretrieve(link, fn)
         except Exception as e:
             self.msg = 'Error fetching torrent (%s)' % e
@@ -96,17 +96,17 @@ class SendTorrent:
 
 # parse arguments
 parser = argparse.ArgumentParser(description = 'showRSS downloader')
-parser.add_argument('--watchdir',
+parser.add_argument('--watchdir', '-d',
         default = getcwd(),
         help = 'Directory to store torrent files, defaults to current directory.')
-parser.add_argument('--auth',
+parser.add_argument('--auth', '-a',
         default = None,
         help = 'RPC authentication for transmission-remote as <user:passwd>.' +  
                'Only required for magnet links. Defaults to no authentication.')
-parser.add_argument('--verbose',
+parser.add_argument('--verbose', '-v',
         action = 'store_true',
         help = 'Be more verbose. Helpful for debugging.')
-parser.add_argument('--cachefile',
+parser.add_argument('--cachefile', '-c',
         default = '~/.showrss_cache',
         help = 'File to store known torrent ids. Default is "~/.showrss_cache".')
 parser.add_argument('feed', metavar = 'feed', nargs = 1,
@@ -164,7 +164,7 @@ for entry in reversed(feed.entries):
         out.info('Entry "%s" already downloaded ... skipping' % title)
         continue
     
-    if not handler.send(link):
+    if not handler.send(link, title):
         out.warn('Entry "%s": %s ... skipping' % (title, handler.msg))
     else:
         cache.add(id)
