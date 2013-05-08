@@ -4,18 +4,15 @@
 """
 https://github.com/mllg/showrss_dl
 """
-__version__ = '0.2'
+__version__ = '0.3'
 
 
 import argparse
 import feedparser
-import re
 import atexit
 import subprocess
-from urllib.request import urlretrieve
 from pickle import load, dump
 from os import path
-from os import getcwd
 from sys import exit, stdout, stderr
 
 
@@ -51,122 +48,102 @@ class RotatingCache:
         if self.needsupdate:
             with open(self.fn, 'wb') as f:
                 dump(self.items[-self.cachesize:], f)
-
-
-class SendMagnet:
-    msg = None
-    cmd = ['transmission-remote']
-    pat = re.compile(r'xt=urn:btih:([^&/]+)')
-    def __init__(self, auth):
-        if auth is not None:
-            self.cmd += ['--auth', auth]
-    def send(self, link, title):
-        if not link[:7] == 'magnet:':
-            self.msg = 'Malformed magnet link (%s)' % link
-            return False
-        if self.pat.search(link) is None:
-            self.msg = 'No hash in magnet link (%s)' % link
-            return False
-        
-        try:
-            subprocess.check_output(self.cmd + ['--add', link], stderr = subprocess.STDOUT)
-        except subprocess.CalledProcessError as e:
-            print(e.output)
-            self.msg = 'Error sending to transmission (%s)' % str(e.output)
-            return False
-        except (OSError, Exception) as e:
-            self.msg = 'Error sending to transmission (%s)' % e
-            return False
-        return True
-
-
-class SendTorrent:
-    msg = None
-    def __init__(self, dir):
-        self.dir = path.expanduser(dir)
-    def send(self, link, title):
-        try:
-            fn = path.join(self.dir, "%s.torrent" % title)
-            urlretrieve(link, fn)
-        except Exception as e:
-            self.msg = 'Error fetching torrent (%s)' % e
-            return False
-        return True
-
+            self.needsupdate = False
 
 # parse arguments
 parser = argparse.ArgumentParser(description = 'showRSS downloader')
-parser.add_argument('--watchdir', '-d',
-        default = getcwd(),
-        help = 'Directory to store torrent files, defaults to current directory.')
-parser.add_argument('--auth', '-a',
+parser.add_argument('--host',
+        default = 'localhost',
+        help = 'Base directory for downloaded files, defaults to transmission\'s default download directory')
+parser.add_argument('--destination',
+        default = None,
+        help = 'Base directory for downloaded files, defaults to transmission\'s default download directory')
+parser.add_argument('--auth',
         default = None,
         help = 'RPC authentication for transmission-remote as <user:passwd>.' +  
                'Only required for magnet links. Defaults to no authentication.')
-parser.add_argument('--verbose', '-v',
+parser.add_argument('--verbose',
         action = 'store_true',
-        help = 'Be more verbose. Helpful for debugging.')
-parser.add_argument('--cachefile', '-c',
-        default = '~/.showrss_cache',
-        help = 'File to store known torrent ids. Default is "~/.showrss_cache".')
+        help = 'Be more verbose.')
 parser.add_argument('feed', metavar = 'feed', nargs = 1,
         help = 'showRSS feed with magnet links as generated on the website.')
 args = parser.parse_args()
+feed = args.feed[0]
 
-# set up simple console output
+
+# set up simple console output logger
 out = ConsoleOutput(args.verbose)
 
-# add namespace=true to the feed url if it is missing
-feed = args.feed[0]
-if feed.find('namespaces=true') == -1:
-    feed += '&namespaces=true'
 
-out.info("Using feed: %s" % feed)
+# try to send command to server
+cmd = ['transmission-remote', args.host]
+if args.auth is not None:
+    cmd += ['--auth', args.auth]
+try:
+    lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT)
+except subprocess.CalledProcessError as e:
+    out.error('Error retrieving session info: %e' % e.decode())
+
+
+# determine destination directory
+if args.destination is None:
+    lines = lines.decode().split('\n')
+    lines = list(filter(lambda x: 'Download directory:' in x, lines))
+    if len(lines) != 1:
+        out.error('Error determining download base dir: %s' % e)
+    args.destination = lines[0].split(':', 1)[1].strip()
+
+
+# check the feed uri
+if feed.find('namespaces=true') == -1 or feed.find('magnets=true') == -1:
+    out.error('Invalid feed URL. Magnets and namespaces are required')
+
 
 # initialize the cache
-if path.exists(args.cachefile) and path.isdir(args.cachefile):
-    out.error('Argument cachefile points to a directory ("%s")' % args.cachefile)
-cache = RotatingCache(args.cachefile)
+cache = RotatingCache("~/.showrss_cache")
 atexit.register(cache.write)
 
-# determine the mode: torrents to store or magnets to send directly
-magnets = feed.find('magnets=true') > -1
-if magnets:
-    handler = SendMagnet(args.auth)
-else:
-    if not path.isdir(args.watchdir):
-        out.error('Directory "%s" not found or file in place' % args.watchdir)
-    handler = SendTorrent(args.watchdir)
 
-# get the feed
-feed = feedparser.parse(feed)
+# try to get the feed
+try:
+    feed = feedparser.parse(feed)
+except Exception as e:
+    out.error('Error getting the feed: %e' % e)
 if feed.bozo:
-    out.error('Bozo feed in "%s" (%s)' % (feed, feed.bozo_exception.getMessage()))
+    out.error('Bozo feed: %s' % feed.bozo_exception.getMessage())
+
 
 # iterate over the entries
 for entry in reversed(feed.entries):
-    if not entry.has_key('title'):
-        out.warn('Item with missing title found ... skipping')
-        continue
-    title = entry['title']
-    
-    if not entry.has_key('link'):
-        out.warn('Entry "%s": no link available ... skipping' % title)
-        continue
-    link = entry['link']
-
     if not entry.has_key('showrss_episode'):
-        out.warn('Entry "%s": no episode id available ... skipping' % title)
+        out.warn('Found entry with missing episode id ... skipping')
         continue
     id = entry['showrss_episode']
     
     if id in cache.items:
-        out.info('Entry "%s" already downloaded ... skipping' % title)
+        out.info('Entry "%s": already downloaded ... skipping' % id)
         continue
-    
-    if not handler.send(link, title):
-        out.warn('Entry "%s": %s ... skipping' % (title, handler.msg))
+
+    if not entry.has_key('showrss_showname'):
+        out.warn('Entry "%s": no showname found ... skipping' % id)
+        continue
+    show = entry['showrss_showname']
+
+    if not entry.has_key('link') or not entry['link'][:7] == 'magnet:':
+        out.warn('Entry "%s": no magnet link available ... skipping' % id)
+        continue
+    link = entry['link']
+
+    destination = path.join(args.destination, show) 
+    try:
+        subprocess.check_output(cmd + ['--add', link, '--download-dir', destination], stderr = subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        out.warn('Error sending to transmission: %s' % e.output)
+    except (OSError, Exception) as e:
+        out.warn('Error sending to transmission: %s' % e)
     else:
+        out.info('Storing new episode of "%s" in "%s"' % (show, destination))
         cache.add(id)
+    
 
 exit(0)
