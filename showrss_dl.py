@@ -71,6 +71,7 @@ args = parser.parse_args()
 feed = args.feed[0]
 
 
+
 # set up simple console output logger
 out = ConsoleOutput(args.verbose)
 
@@ -80,9 +81,11 @@ cmd = ['transmission-remote', args.host]
 if args.auth is not None:
     cmd += ['--auth', args.auth]
 try:
-    lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT)
+    lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT, shell = True)
 except subprocess.CalledProcessError as e:
     out.error('Error retrieving session info: %e' % e.decode())
+except Exception as e:
+    out.error('Error retrieving session info: %e' % e)
 
 
 # determine destination directory
@@ -136,10 +139,10 @@ for entry in reversed(feed.entries):
 
     destination = path.join(args.destination, show) 
     try:
-        subprocess.check_output(cmd + ['--add', link, '--download-dir', destination], stderr = subprocess.STDOUT)
+        subprocess.check_output(cmd + ['--add', link, '--download-dir', destination], stderr = subprocess.STDOUT, shell = True)
     except subprocess.CalledProcessError as e:
         out.warn('Error sending to transmission: %s' % e.output)
-    except (OSError, Exception) as e:
+    except Exception as e:
         out.warn('Error sending to transmission: %s' % e)
     else:
         out.info('Storing new episode of "%s" in "%s"' % (show, destination))
