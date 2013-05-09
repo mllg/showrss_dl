@@ -83,9 +83,9 @@ if args.auth is not None:
 try:
     lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT, shell = True)
 except subprocess.CalledProcessError as e:
-    out.error('Error retrieving session info: %e' % e.output.decode())
+    out.error('Error retrieving session info: %s' % e.output.decode())
 except Exception as e:
-    out.error('Error retrieving session info: %e' % e)
+    out.error('Error retrieving session info: %s' % e)
 
 
 # determine destination directory
@@ -111,7 +111,7 @@ atexit.register(cache.write)
 try:
     feed = feedparser.parse(feed)
 except Exception as e:
-    out.error('Error getting the feed: %e' % e)
+    out.error('Error getting the feed: %s' % e)
 if feed.bozo:
     out.error('Bozo feed: %s' % feed.bozo_exception.getMessage())
 
