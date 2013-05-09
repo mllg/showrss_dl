@@ -62,6 +62,9 @@ parser.add_argument('--auth',
         default = None,
         help = 'RPC authentication for transmission-remote as <user:passwd>.' +  
                'Only required for magnet links. Defaults to no authentication.')
+parser.add_argument('--binary',
+        default = 'transmission-remote',
+        help = 'Full path to the transmission-remote binary. Only required if not in path.')
 parser.add_argument('--verbose',
         action = 'store_true',
         help = 'Be more verbose.')
@@ -77,11 +80,11 @@ out = ConsoleOutput(args.verbose)
 
 
 # try to send command to server
-cmd = ['transmission-remote', args.host]
+cmd = [args.binary, args.host]
 if args.auth is not None:
     cmd += ['--auth', args.auth]
 try:
-    lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT, shell = True)
+    lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT)
 except subprocess.CalledProcessError as e:
     out.error('Error retrieving session info: %s' % e.output.decode())
 except Exception as e:
@@ -139,7 +142,7 @@ for entry in reversed(feed.entries):
 
     destination = path.join(args.destination, show) 
     try:
-        subprocess.check_output(cmd + ['--add', link, '--download-dir', destination], stderr = subprocess.STDOUT, shell = True)
+        subprocess.check_output(cmd + ['--add', link, '--download-dir', destination], stderr = subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         out.warn('Error sending to transmission: %s' % e.output.decode())
     except Exception as e:
