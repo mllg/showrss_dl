@@ -83,7 +83,7 @@ if args.auth is not None:
 try:
     lines = subprocess.check_output(cmd + ['-si'], stderr = subprocess.STDOUT, shell = True)
 except subprocess.CalledProcessError as e:
-    out.error('Error retrieving session info: %e' % e.decode())
+    out.error('Error retrieving session info: %e' % e.output.decode())
 except Exception as e:
     out.error('Error retrieving session info: %e' % e)
 
@@ -141,7 +141,7 @@ for entry in reversed(feed.entries):
     try:
         subprocess.check_output(cmd + ['--add', link, '--download-dir', destination], stderr = subprocess.STDOUT, shell = True)
     except subprocess.CalledProcessError as e:
-        out.warn('Error sending to transmission: %s' % e.output)
+        out.warn('Error sending to transmission: %s' % e.output.decode())
     except Exception as e:
         out.warn('Error sending to transmission: %s' % e)
     else:
